@@ -1,5 +1,7 @@
 # openwrt-radxa-cubie-a5e
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/imnotdev25/openwrt-radxa-cubie-a5e/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/imnotdev25/openwrt-radxa-cubie-a5e/tree/main)
+
 OpenWrt build for the Radxa Cubie A5E (Allwinner A527, kernel 6.18). Wi-Fi uses the AIC8800D80 SDIO driver.
 
 ## Workflows
