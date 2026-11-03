@@ -1,24 +1,24 @@
 version: 2.1
 
-# Cloud machine executor: resource class "large" (the largest class this plan allows).
-# Expect a much slower build than a 16 vCPU machine, and possible out-of-memory failures.
-# Disk is the tight limit. The build tree is cut down with:
-#   - CONFIG_TARGET_ROOTFS_INITRAMFS=n (skips the 1 GB+ initramfs image)
-#   - CONFIG_AUTOREMOVE=y (deletes each package's build_dir after install)
-# Free-space check uses 85 GB because df reports slightly less than the 100 GB disk.
+# Two image jobs share one build command:
+#   build-wifi-docker  -> configs/wifi-docker.diffconfig (Wi-Fi + Docker)
+#   build-full-image   -> configs/full.config (all packages, all themes)
+#
+# Resource class "large" is the biggest class on the current plan.
+# Disk is the tight limit (100 GB). Each build sets:
+#   - CONFIG_TARGET_ROOTFS_INITRAMFS=n (skips the initramfs image)
+#   - CONFIG_AUTOREMOVE=y (removes each package's build_dir after install)
 
 parameters:
   rootfs_partsize:
     type: string
     default: "800"
 
-jobs:
-  build-full-image:
-    machine:
-      image: ubuntu-2404:current
-    resource_class: large
-    environment:
-      PARTSIZE: << pipeline.parameters.rootfs_partsize >>
+commands:
+  build-image:
+    parameters:
+      seed:
+        type: string
     steps:
       - checkout
       - run:
@@ -37,10 +37,13 @@ jobs:
           name: Seed config
           command: |
             case "$PARTSIZE" in (*[!0-9]*|"") echo "Bad partsize: $PARTSIZE"; exit 1;; esac
-            cp configs/full.config .config
-            sed -i "s/^CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE/" .config
-            sed -i "s/^CONFIG_TARGET_ROOTFS_INITRAMFS=.*/# CONFIG_TARGET_ROOTFS_INITRAMFS is not set/" .config
-            sed -i "s/^# CONFIG_AUTOREMOVE is not set/CONFIG_AUTOREMOVE=y/; s/^CONFIG_AUTOREMOVE=.*/CONFIG_AUTOREMOVE=y/" .config
+            cp "<< parameters.seed >>" .config
+            sed -i '/^CONFIG_TARGET_ROOTFS_PARTSIZE=/d; /^CONFIG_TARGET_ROOTFS_INITRAMFS/d; /^# CONFIG_TARGET_ROOTFS_INITRAMFS is not set/d; /CONFIG_AUTOREMOVE/d' .config
+            {
+              echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE"
+              echo "# CONFIG_TARGET_ROOTFS_INITRAMFS is not set"
+              echo "CONFIG_AUTOREMOVE=y"
+            } >> .config
             grep -q "^CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE$" .config || { echo "partsize not applied"; exit 1; }
             grep -q "^CONFIG_AUTOREMOVE=y" .config || { echo "autoremove not applied"; exit 1; }
             make defconfig
@@ -60,7 +63,29 @@ jobs:
       - store_artifacts:
           path: build.log
 
+jobs:
+  build-wifi-docker:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PARTSIZE: << pipeline.parameters.rootfs_partsize >>
+    steps:
+      - build-image:
+          seed: configs/wifi-docker.diffconfig
+
+  build-full-image:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PARTSIZE: << pipeline.parameters.rootfs_partsize >>
+    steps:
+      - build-image:
+          seed: configs/full.config
+
 workflows:
   image:
     jobs:
+      - build-wifi-docker
       - build-full-image
