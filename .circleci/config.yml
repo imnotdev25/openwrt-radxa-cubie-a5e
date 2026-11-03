@@ -1,7 +1,7 @@
 version: 2.1
 
 # One image job runs the shared build command:
-#   build-wifi-docker  -> configs/wifi-docker.diffconfig (Wi-Fi + Docker)
+#   build-wifi-only  -> configs/wifi-only.diffconfig (Wi-Fi only)
 #
 # Resource class "large" is the biggest class on the current plan.
 # Disk is the tight limit (100 GB). Each build sets:
@@ -63,7 +63,7 @@ commands:
           path: build.log
 
 jobs:
-  build-wifi-docker:
+  build-wifi-only:
     machine:
       image: ubuntu-2404:current
     resource_class: large
@@ -71,9 +71,9 @@ jobs:
       PARTSIZE: << pipeline.parameters.rootfs_partsize >>
     steps:
       - build-image:
-          seed: configs/wifi-docker.diffconfig
+          seed: configs/wifi-only.diffconfig
 
 workflows:
   image:
     jobs:
-      - build-wifi-docker
+      - build-wifi-only

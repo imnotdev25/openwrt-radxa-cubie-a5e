@@ -1,0 +1,13 @@
+# Wi-Fi only (no Docker). Seeds the CircleCI build-wifi-only job.
+CONFIG_TARGET_sunxi=y
+CONFIG_TARGET_sunxi_cortexa55=y
+CONFIG_TARGET_sunxi_cortexa55_DEVICE_radxa_cubie-a5e=y
+CONFIG_TARGET_ROOTFS_PARTSIZE=800
+CONFIG_TARGET_ROOTFS_INITRAMFS=n
+CONFIG_TARGET_IMAGES_GZIP=y
+CONFIG_BUILD_LOG=y
+CONFIG_DRIVER_11AX_SUPPORT=y
+CONFIG_PACKAGE_kmod-aic8800-sdio=y
+CONFIG_PACKAGE_wpad-mbedtls=y
+CONFIG_PACKAGE_dropbear=y
+CONFIG_PACKAGE_sfdisk=y
