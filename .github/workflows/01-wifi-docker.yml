@@ -31,9 +31,9 @@ jobs:
           PARTSIZE: ${{ inputs.rootfs_partsize }}
         run: |
           case "$PARTSIZE" in (*[!0-9]*|"") echo "Bad partsize: $PARTSIZE"; exit 1;; esac
-          cp configs/$(basename "$(ls configs/*.diffconfig configs/full.config 2>/dev/null | head -1)") .config
+          cp configs/wifi-docker.diffconfig .config
           sed -i "s/^CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE/" .config
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE" >> .config
+          grep -q "^CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE$" .config || { echo "partsize not applied"; exit 1; }
           make defconfig
 
       - name: Build
