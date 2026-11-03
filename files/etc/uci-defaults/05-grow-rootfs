@@ -1,0 +1,46 @@
+#!/bin/sh
+# Grow the root partition (mmcblk0p2) to the end of the SD card, then grow
+# the ext4 filesystem to match. Runs once on first boot.
+# Exit 0 = done (script is removed). Exit 1 = retry on next boot.
+
+DISK=mmcblk0
+PART=${DISK}p2
+log() { logger -t grow-rootfs "$*"; echo "grow-rootfs: $*" > /dev/console; }
+
+# Only for the ext4 image with root on the SD card's second partition.
+grep -qE "^/dev/(root|$PART) / ext4 " /proc/mounts || { log "root is not ext4, skipping"; exit 0; }
+[ -b /dev/$PART ] || { log "/dev/$PART not found, skipping"; exit 0; }
+# Partition 2 must be the last one, so growing it can't overwrite anything.
+[ -e /sys/class/block/${DISK}p3 ] && { log "${DISK}p3 exists, skipping"; exit 0; }
+
+disk_sectors=$(cat /sys/class/block/$DISK/size)
+start=$(cat /sys/class/block/$PART/start)
+size=$(cat /sys/class/block/$PART/size)
+end=$((start + size))
+
+# Grow the partition if more than 8 MiB is free after it.
+if [ $((disk_sectors - end)) -gt 16384 ]; then
+	sfdisk -d /dev/$DISK > /etc/partition-table.before-grow 2>/dev/null
+	if echo ", +" | sfdisk --no-reread -N 2 /dev/$DISK >/tmp/grow-sfdisk.log 2>&1; then
+		log "partition grown, start sector $start kept"
+	else
+		log "sfdisk failed, see /tmp/grow-sfdisk.log; leaving partition as is"
+		exit 0
+	fi
+	# Tell the kernel about the new size of the mounted partition.
+	partx -u -n 2 /dev/$DISK 2>/dev/null
+fi
+
+new_size=$(cat /sys/class/block/$PART/size)
+if [ "$new_size" -le "$size" ] && [ $((disk_sectors - end)) -gt 16384 ]; then
+	log "kernel still sees the old size, will resize after next reboot"
+	exit 1
+fi
+
+# Online grow of the mounted ext4 filesystem. A no-op if already full size.
+if resize2fs /dev/$PART >/tmp/grow-resize2fs.log 2>&1; then
+	log "filesystem grown: $(df -h / | tail -1)"
+	exit 0
+fi
+log "resize2fs failed, see /tmp/grow-resize2fs.log; will retry on next boot"
+exit 1

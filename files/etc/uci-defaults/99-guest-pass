@@ -1,0 +1,99 @@
+#!/bin/sh
+# Guest Wi-Fi with openNDS voucher login ("guest passes").
+# Guest network 192.168.60.0/24, isolated from LAN, internet only after a valid pass.
+# Runs after 98-open-ap, which would otherwise rewrite every wifi-iface.
+
+GUEST_IP=192.168.60.1
+GUEST_SSID='OpenWrt-Guest'
+
+uci -q get network.guest >/dev/null && exit 0
+
+uci -q batch <<EOF
+set network.br_guest=device
+set network.br_guest.type='bridge'
+set network.br_guest.name='br-guest'
+set network.br_guest.bridge_empty='1'
+set network.guest=interface
+set network.guest.proto='static'
+set network.guest.device='br-guest'
+set network.guest.ipaddr='$GUEST_IP'
+set network.guest.netmask='255.255.255.0'
+
+set dhcp.guest=dhcp
+set dhcp.guest.interface='guest'
+set dhcp.guest.start='100'
+set dhcp.guest.limit='150'
+set dhcp.guest.leasetime='1h'
+
+set firewall.guest=zone
+set firewall.guest.name='guest'
+set firewall.guest.network='guest'
+set firewall.guest.input='REJECT'
+set firewall.guest.output='ACCEPT'
+set firewall.guest.forward='REJECT'
+set firewall.guest_wan=forwarding
+set firewall.guest_wan.src='guest'
+set firewall.guest_wan.dest='wan'
+set firewall.guest_dhcp=rule
+set firewall.guest_dhcp.name='Allow-Guest-DHCP'
+set firewall.guest_dhcp.src='guest'
+set firewall.guest_dhcp.proto='udp'
+set firewall.guest_dhcp.dest_port='67-68'
+set firewall.guest_dhcp.target='ACCEPT'
+set firewall.guest_dns=rule
+set firewall.guest_dns.name='Allow-Guest-DNS'
+set firewall.guest_dns.src='guest'
+set firewall.guest_dns.proto='tcp udp'
+set firewall.guest_dns.dest_port='53'
+set firewall.guest_dns.target='ACCEPT'
+set firewall.guest_portal=rule
+set firewall.guest_portal.name='Allow-Guest-Portal'
+set firewall.guest_portal.src='guest'
+set firewall.guest_portal.proto='tcp'
+set firewall.guest_portal.dest_port='2050'
+set firewall.guest_portal.target='ACCEPT'
+EOF
+
+radio=$(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p' | head -n 1)
+if [ -n "$radio" ]; then
+	uci -q batch <<EOF
+set wireless.guest=wifi-iface
+set wireless.guest.device='$radio'
+set wireless.guest.mode='ap'
+set wireless.guest.network='guest'
+set wireless.guest.ssid='$GUEST_SSID'
+set wireless.guest.encryption='none'
+set wireless.guest.isolate='1'
+EOF
+fi
+
+# Captive portal on the guest bridge with voucher login.
+uci -q batch <<EOF
+set opennds.@opennds[0].enabled='1'
+set opennds.@opennds[0].gatewayinterface='br-guest'
+set opennds.@opennds[0].login_option_enabled='3'
+set opennds.@opennds[0].themespec_path='/usr/lib/opennds/theme_voucher.sh'
+EOF
+
+# Buttons in LuCI under System > Custom Commands.
+add_cmd() {
+	s=$(uci add luci command)
+	uci set "luci.$s.name=$1"
+	uci set "luci.$s.command=$2"
+	[ -n "$3" ] && uci set "luci.$s.param=1"
+}
+add_cmd 'Guest pass: create (arguments: minutes count)' '/usr/bin/guestpass new' 1
+add_cmd 'Guest pass: list' '/usr/bin/guestpass list'
+add_cmd 'Guest pass: guests online' '/usr/bin/guestpass online'
+add_cmd 'Guest pass: revoke (argument: code)' '/usr/bin/guestpass revoke' 1
+
+uci commit network
+uci commit dhcp
+uci commit firewall
+uci commit wireless
+uci commit opennds
+uci commit luci
+
+# Five starter passes, valid 60 minutes from first use.
+/usr/bin/guestpass new 60 5 >/dev/null
+exit 0

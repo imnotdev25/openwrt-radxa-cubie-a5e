@@ -1,0 +1,30 @@
+#!/bin/sh
+# Open test AP. Uses 5 GHz (Wi-Fi 5, VHT80, ch 36) if the PHY exposes it,
+# otherwise falls back to 2.4 GHz (Wi-Fi 4, HT20, ch 6).
+[ -s /etc/config/wireless ] || wifi config
+radios=$(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p')
+[ -n "$radios" ] || exit 1
+
+if iw list 2>/dev/null | grep -qE '\* 5[0-9]{3}(\.[0-9])? MHz'; then
+  band=5g; channel=36; htmode=VHT80
+else
+  band=2g; channel=6; htmode=HT20
+fi
+
+for r in $radios; do
+  uci set wireless.$r.disabled='0'
+  uci set wireless.$r.country='IN'
+  uci set wireless.$r.band="$band"
+  uci set wireless.$r.channel="$channel"
+  uci set wireless.$r.htmode="$htmode"
+done
+for i in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+  uci set wireless.$i.mode='ap'
+  uci set wireless.$i.ssid='OpenWrt-A5E'
+  uci set wireless.$i.encryption='none'
+  uci set wireless.$i.network='lan'
+  uci set wireless.$i.disabled='0'
+  uci -q delete wireless.$i.key
+done
+uci commit wireless
+exit 0

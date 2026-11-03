@@ -1,0 +1,42 @@
+name: 02 Full image (Wi-Fi, Docker, all themes)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64, openwrt-large]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check free disk (need 120 GB)
+        run: |
+          avail=$(df -BG --output=avail . | tail -1 | tr -dc '0-9')
+          echo "Free: ${avail} GB"
+          [ "$avail" -ge 120 ] || { echo "Not enough disk"; exit 1; }
+
+      - name: Feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Seed config (full flagged)
+        run: |
+          cp configs/full.config .config
+          make defconfig
+
+      - name: Build
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" download
+          make -j"$(nproc)" V=s 2>&1 | tee build.log
+          echo "BUILD-EXIT=$?"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: full-image
+          path: |
+            bin/targets/sunxi/cortexa55/*-sdcard.img.gz
+            build.log
+          if-no-files-found: error

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Allow LuCI (HTTP, port 80) from the WAN side, limited to private networks
+# (the main router's LAN). Requests from public internet addresses stay blocked.
+uci -q get firewall.allow_web_wan >/dev/null && exit 0
+uci set firewall.allow_web_wan=rule
+uci set firewall.allow_web_wan.name='Allow-LuCI-WAN'
+uci set firewall.allow_web_wan.src='wan'
+uci set firewall.allow_web_wan.proto='tcp'
+uci set firewall.allow_web_wan.dest_port='80'
+uci add_list firewall.allow_web_wan.src_ip='10.0.0.0/8'
+uci add_list firewall.allow_web_wan.src_ip='172.16.0.0/12'
+uci add_list firewall.allow_web_wan.src_ip='192.168.0.0/16'
+uci set firewall.allow_web_wan.target='ACCEPT'
+uci commit firewall
+exit 0

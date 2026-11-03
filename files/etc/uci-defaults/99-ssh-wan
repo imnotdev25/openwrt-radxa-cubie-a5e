@@ -1,0 +1,11 @@
+#!/bin/sh
+# Allow SSH from the WAN side (main router's network).
+uci -q get firewall.allow_ssh_wan >/dev/null && exit 0
+uci set firewall.allow_ssh_wan=rule
+uci set firewall.allow_ssh_wan.name='Allow-SSH-WAN'
+uci set firewall.allow_ssh_wan.src='wan'
+uci set firewall.allow_ssh_wan.proto='tcp'
+uci set firewall.allow_ssh_wan.dest_port='22'
+uci set firewall.allow_ssh_wan.target='ACCEPT'
+uci commit firewall
+exit 0

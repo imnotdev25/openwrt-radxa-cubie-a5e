@@ -1,0 +1,6 @@
+#!/bin/sh
+# Make Material the default LuCI theme.
+uci -q set luci.themes.Material='/luci-static/material'
+uci set luci.main.mediaurlbase='/luci-static/material'
+uci commit luci
+exit 0

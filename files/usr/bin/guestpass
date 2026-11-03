@@ -1,0 +1,62 @@
+#!/bin/sh
+# Guest pass helper for openNDS voucher login.
+#   guestpass new [minutes] [count]   create passes (default 60 min, 1 pass)
+#   guestpass list                    show passes and their state
+#   guestpass online                  show guests currently connected
+#   guestpass revoke <code>           delete an unused or active pass
+
+ROLL=/etc/opennds/vouchers.txt
+
+die() { echo "error: $*" >&2; exit 1; }
+isnum() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
+new_code() { tr -dc 'a-z0-9' < /dev/urandom | head -c 9; }
+
+mkdir -p "${ROLL%/*}" && touch "$ROLL" || die "cannot write $ROLL"
+
+case "$1" in
+new)
+	mins=${2:-60}
+	count=${3:-1}
+	{ isnum "$mins" && [ "$mins" -ge 1 ] && [ "$mins" -le 525600 ]; } || die "minutes must be a number from 1 to 525600"
+	{ isnum "$count" && [ "$count" -ge 1 ] && [ "$count" -le 50 ]; } || die "count must be a number from 1 to 50"
+	i=0
+	while [ "$i" -lt "$count" ]; do
+		code=$(new_code)
+		grep -q "^$code," "$ROLL" && continue
+		# code, speed down, speed up, quota down, quota up, minutes, first-use time
+		echo "$code,0,0,0,0,$mins,0" >> "$ROLL"
+		echo "$code  valid for $mins min after first use"
+		i=$((i + 1))
+	done
+	;;
+list)
+	[ -s "$ROLL" ] || { echo "no guest passes"; exit 0; }
+	now=$(date +%s)
+	while IFS=, read -r code down up qdown qup mins used; do
+		[ -n "$code" ] || continue
+		if [ "$used" = 0 ]; then
+			state="unused"
+		else
+			left=$(( (used + mins * 60 - now) / 60 ))
+			if [ "$left" -gt 0 ]; then state="in use, $left min left"; else state="expired"; fi
+		fi
+		echo "$code  $mins min  $state"
+	done < "$ROLL"
+	;;
+online)
+	ndsctl json 2>/dev/null || ndsctl status
+	;;
+revoke)
+	case "$2" in
+	[a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-][a-z0-9-]) ;;
+	*) die "give a 9-character pass code" ;;
+	esac
+	grep -q "^$2," "$ROLL" || die "no such pass: $2"
+	sed -i "/^$2,/d" "$ROLL"
+	echo "revoked $2 (a guest already online stays connected until the session ends)"
+	;;
+*)
+	echo "usage: guestpass new [minutes] [count] | list | online | revoke <code>"
+	exit 1
+	;;
+esac
