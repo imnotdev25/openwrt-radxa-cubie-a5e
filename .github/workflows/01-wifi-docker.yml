@@ -2,6 +2,11 @@ name: 01 Wi-Fi and Docker
 
 on:
   workflow_dispatch:
+    inputs:
+      rootfs_partsize:
+        description: "Root partition size in MB"
+        required: true
+        default: "16384"
 
 jobs:
   build:
@@ -21,9 +26,14 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Seed config (Wi-Fi + Docker)
+      - name: Seed config
+        env:
+          PARTSIZE: ${{ inputs.rootfs_partsize }}
         run: |
-          cp configs/wifi-docker.diffconfig .config
+          case "$PARTSIZE" in (*[!0-9]*|"") echo "Bad partsize: $PARTSIZE"; exit 1;; esac
+          cp configs/$(basename "$(ls configs/*.diffconfig configs/full.config 2>/dev/null | head -1)") .config
+          sed -i "s/^CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE/" .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE" >> .config
           make defconfig
 
       - name: Build
