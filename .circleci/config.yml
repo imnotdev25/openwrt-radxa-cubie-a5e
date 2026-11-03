@@ -1,0 +1,56 @@
+version: 2.1
+
+# CircleCI cloud machine executors have 100 GB disk (arm.2xlarge: 16 vCPU, 64 GB RAM).
+# The OpenWrt build needs about 120 GB, so this config runs on a self-hosted runner.
+# Create the resource class in CircleCI (Runners) with at least 120 GB free disk,
+# 16 vCPU and 32 GB RAM, then replace the placeholder below.
+
+parameters:
+  rootfs_partsize:
+    type: string
+    default: "800"
+
+jobs:
+  build-full-image:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: imnotdev25/openwrt-large
+    environment:
+      PARTSIZE: << pipeline.parameters.rootfs_partsize >>
+    steps:
+      - checkout
+      - run:
+          name: Check free disk (need 120 GB)
+          command: |
+            avail=$(df -BG --output=avail . | tail -1 | tr -dc '0-9')
+            echo "Free: ${avail} GB"
+            [ "$avail" -ge 120 ] || { echo "Not enough disk"; exit 1; }
+      - run:
+          name: Feeds
+          command: |
+            ./scripts/feeds update -a
+            ./scripts/feeds install -a
+      - run:
+          name: Seed config
+          command: |
+            case "$PARTSIZE" in (*[!0-9]*|"") echo "Bad partsize: $PARTSIZE"; exit 1;; esac
+            cp configs/full.config .config
+            sed -i "s/^CONFIG_TARGET_ROOTFS_PARTSIZE=.*/CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE/" .config
+            grep -q "^CONFIG_TARGET_ROOTFS_PARTSIZE=$PARTSIZE$" .config || { echo "partsize not applied"; exit 1; }
+            make defconfig
+      - run:
+          name: Build
+          command: |
+            set -o pipefail
+            make -j"$(nproc)" download
+            make -j"$(nproc)" V=s 2>&1 | tee build.log
+      - store_artifacts:
+          path: bin/targets/sunxi/cortexa55
+          destination: image
+      - store_artifacts:
+          path: build.log
+
+workflows:
+  image:
+    jobs:
+      - build-full-image
