@@ -17,7 +17,7 @@ Trigger any workflow from the Actions tab (`workflow_dispatch`).
 - Disk: 120 GB free minimum. Build tree, downloads and output reach about 100 GB.
 - CPU: 16 cores recommended.
 - RAM: 30 GB recommended.
-- Final image: the 16 GB root partition is set by `CONFIG_TARGET_ROOTFS_PARTSIZE=16384`. The `.img.gz` is about 420 MB.
+- Final image: the 16 GB root partition is set by `CONFIG_TARGET_ROOTFS_PARTSIZE=16384`. The `.img.gz` is about 800 MB (from the first build).
 - GitHub-hosted runners have about 14 GB free and cannot run these jobs. Register a self-hosted runner with the labels `self-hosted, linux, x64, openwrt-large`.
 
 ## Not in this repo
