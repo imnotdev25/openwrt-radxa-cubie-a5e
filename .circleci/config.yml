@@ -1,6 +1,7 @@
 version: 2.1
 
-# Cloud machine executor: arm.2xlarge (16 vCPU, 64 GB RAM, 100 GB disk).
+# Cloud machine executor: resource class "large" (the largest class this plan allows).
+# Expect a much slower build than a 16 vCPU machine, and possible out-of-memory failures.
 # Disk is the tight limit. The build tree is cut down with:
 #   - CONFIG_TARGET_ROOTFS_INITRAMFS=n (skips the 1 GB+ initramfs image)
 #   - CONFIG_AUTOREMOVE=y (deletes each package's build_dir after install)
@@ -15,7 +16,7 @@ jobs:
   build-full-image:
     machine:
       image: ubuntu-2404:current
-    resource_class: arm.2xlarge
+    resource_class: large
     environment:
       PARTSIZE: << pipeline.parameters.rootfs_partsize >>
     steps:
